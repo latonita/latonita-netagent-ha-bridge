@@ -7,7 +7,7 @@
   },
   "author": "Anton.Viktorov@live.com",
   "license": "MIT",
-  "description": "Megatec NetAgent Web to MQTT/HomeAssitant bridge",
+  "description": "Megatec UPS NetAgent Web to MQTT/HomeAssitant bridge",
   "repository": {
     "type": "git",
     "url": "https://github.com/latonita/netagent-ha-bridge.git"

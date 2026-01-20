@@ -6,22 +6,26 @@ const net = require('net');
 
 const MQTT_SERVER = process.env.MQTT_SERVER || 'mqtt://192.168.1.1';
 const IP_ADDRESS = process.env.UPS_IP || '192.168.1.2';
-const UPS_PORT = Number(process.env.UPS_PORT || 80);
-const UPS_TOPIC = process.env.UPS_TOPIC || 'ups-sip-basement';
+const UPS_HTTP_PORT = Number(process.env.UPS_PORT || 80);
+
+const UPS_TOPIC = process.env.UPS_TOPIC || 'ups-netagent';
 const DISCOVERY_TOPIC_PREFIX = process.env.DISCOVERY_TOPIC_PREFIX || `homeassistant/sensor/${UPS_TOPIC}`;
 const UPS_PAGE_PATHS = {
     status: process.env.UPS_STATUS_PATH || '/pda/status-1.htm',
     system: process.env.UPS_SYSTEM_PATH || '/pda/sys_status.htm',
     info: process.env.UPS_INFO_PATH || '/pda/UPS.htm'
 };
-const CONFIGURATION_URL = process.env.UPS_CONFIG_URL || (UPS_PORT === 80 ? `http://${IP_ADDRESS}` : `http://${IP_ADDRESS}:${UPS_PORT}`);
-const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 20000);
+const HA_DEVICE_ID = process.env.HA_DEVICE_ID || 'ups_netagent';
+const HA_DEVICE_NAME = process.env.HA_DEVICE_NAME;
+
+const CONFIGURATION_URL = process.env.UPS_CONFIG_URL || (UPS_HTTP_PORT === 80 ? `http://${IP_ADDRESS}` : `http://${IP_ADDRESS}:${UPS_HTTP_PORT}`);
+const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_SECONDS || 20) * 1000;
 
 const logStartupConfiguration = () => {
     console.info('[ups-poller] starting with configuration:', JSON.stringify({
         mqttServer: MQTT_SERVER,
         upsIp: IP_ADDRESS,
-        upsPort: UPS_PORT,
+        upsPort: UPS_HTTP_PORT,
         pollIntervalMs: POLL_INTERVAL_MS,
         upsTopic: UPS_TOPIC,
         discoveryTopicPrefix: DISCOVERY_TOPIC_PREFIX,
@@ -34,7 +38,7 @@ const logStartupConfiguration = () => {
 
 const fetchUpsPage = (path) => {
     return new Promise((resolve, reject) => {
-        const client = net.createConnection({ host: IP_ADDRESS, port: UPS_PORT }, () => {
+        const client = net.createConnection({ host: IP_ADDRESS, port: UPS_HTTP_PORT }, () => {
             const headers = [
                 `GET ${path} HTTP/1.1`,
                 `Host: ${IP_ADDRESS}`,
@@ -219,6 +223,8 @@ const parseSystemStatusPage = (html) => {
         hardwareVersion: labels['Hardware Version'],
         systemFirmwareVersion: labels['Firmware Version'],
         serialNumber: labels['Serial Number'],
+        systemName: labels['System Name'],
+        location: labels['Location'],
         systemTime: toIsoTimestamp(systemTimeDisplay || systemTimeHidden || labels['System Time']),
         uptimeSeconds: uptimeSecondsHidden ? Number(uptimeSecondsHidden) : parseDurationToSeconds(labels['Uptime']),
         upsLastSelfTest: labels['UPS Last Self Test'],
@@ -250,8 +256,8 @@ const parseUpsInfoPage = (html) => {
 
 const buildMqttDeviceInfo = (systemInfo, upsInfo) => {
     const device = {
-        identifiers: ['ups_sip_basement'],
-        name: 'UPS SIP Basement',
+        identifiers: [HA_DEVICE_ID],
+        name: HA_DEVICE_NAME || systemInfo.systemName,
         configuration_url: CONFIGURATION_URL
     };
 
@@ -275,6 +281,10 @@ const buildMqttDeviceInfo = (systemInfo, upsInfo) => {
         device.serial_number = systemInfo.serialNumber;
     }
 
+    if (systemInfo.location) {
+        device.suggested_area = systemInfo.location;
+    }
+
     if (systemInfo.macAddress) {
         device.connections = [['mac', systemInfo.macAddress.toLowerCase()]];
     }
@@ -283,7 +293,7 @@ const buildMqttDeviceInfo = (systemInfo, upsInfo) => {
 };
 
 const SENSOR_DEFINITIONS = {
-    upsStatus: { name: 'UPS Status', icon: 'mdi:power-plug-battery', entityCategory: 'diagnostic', topicSuffix: 'status/general/ups_status' },
+    upsStatus: { name: 'UPS Status', icon: 'mdi:power-plug-battery', topicSuffix: 'status/general/ups_status' },
     acStatus: { name: 'AC Status', icon: 'mdi:connection', topicSuffix: 'status/general/ac_status' },
     inputVoltage: { units: 'V', deviceClass: 'voltage', name: 'Input Voltage', stateClass: 'measurement', topicSuffix: 'status/input/line_voltage' },
     inputMaxVoltage: { units: 'V', deviceClass: 'voltage', name: 'Input Max Voltage', stateClass: 'measurement', entityCategory: 'diagnostic', topicSuffix: 'status/input/max_voltage' },
@@ -291,16 +301,18 @@ const SENSOR_DEFINITIONS = {
     inputFrequency: { units: 'Hz', deviceClass: 'frequency', name: 'Input Frequency', stateClass: 'measurement', suggestedPrecision: 1, topicSuffix: 'status/input/frequency' },
     outputVoltage: { units: 'V', deviceClass: 'voltage', name: 'Output Voltage', stateClass: 'measurement', entityCategory: 'diagnostic', topicSuffix: 'status/output/voltage' },
     outputStatus: { name: 'Output Status', entityCategory: 'diagnostic', topicSuffix: 'status/output/status' },
-    upsLoadPercentage: { units: '%', deviceClass: 'power_factor', name: 'UPS Load', stateClass: 'measurement', icon: 'mdi:gauge', entityCategory: 'diagnostic', topicSuffix: 'status/output/load_percentage' },
+    upsLoadPercentage: { units: '%', name: 'UPS Load', stateClass: 'measurement', icon: 'mdi:gauge', entityCategory: 'diagnostic', topicSuffix: 'status/output/load_percentage' },
     temperature: { units: '°C', deviceClass: 'temperature', name: 'Temperature', stateClass: 'measurement', entityCategory: 'diagnostic', topicSuffix: 'status/battery/temperature' },
     batteryStatus: { name: 'Battery Status', entityCategory: 'diagnostic', topicSuffix: 'status/battery/status' },
     batteryCapacityPercentage: { units: '%', deviceClass: 'battery', name: 'Battery Capacity', stateClass: 'measurement', icon: 'mdi:battery', topicSuffix: 'status/battery/capacity_percentage' },
-    batteryVoltage: { units: 'V', deviceClass: 'voltage', name: 'Battery Voltage', stateClass: 'measurement', suggestedPrecision: 1, topicSuffix: 'status/battery/voltage' },
+    batteryVoltage: { units: 'V', deviceClass: 'voltage', name: 'Battery Voltage', stateClass: 'measurement', suggestedPrecision: 2, topicSuffix: 'status/battery/voltage' },
     timeOnBatterySeconds: { units: 's', deviceClass: 'duration', name: 'Time on Battery', stateClass: 'total_increasing', entityCategory: 'diagnostic', topicSuffix: 'status/battery/time_on_battery_seconds' },
     estimatedTimeRemainingSeconds: { units: 's', deviceClass: 'duration', name: 'Estimated Time Remaining', entityCategory: 'diagnostic', topicSuffix: 'status/battery/estimated_time_remaining_seconds' },
     hardwareVersion: { name: 'Hardware Version', entityCategory: 'diagnostic', topicSuffix: 'system/info/hardware_version' },
     systemFirmwareVersion: { name: 'System Firmware Version', entityCategory: 'diagnostic', topicSuffix: 'system/info/system_firmware_version' },
     serialNumber: { name: 'Serial Number', entityCategory: 'diagnostic', topicSuffix: 'system/info/serial_number' },
+    systemName: { name: 'System Name', entityCategory: 'diagnostic', topicSuffix: 'system/info/system_name' },
+    location: { name: 'Location', entityCategory: 'diagnostic', topicSuffix: 'system/info/location' },
     systemTime: { name: 'System Time', entityCategory: 'diagnostic', topicSuffix: 'system/info/system_time' },
     uptimeSeconds: { units: 's', deviceClass: 'duration', name: 'UPS Uptime', stateClass: 'total_increasing', entityCategory: 'diagnostic', topicSuffix: 'system/info/uptime_seconds' },
     upsLastSelfTest: { name: 'UPS Last Self Test', entityCategory: 'diagnostic', topicSuffix: 'status/self_test/last' },
@@ -316,7 +328,7 @@ const SENSOR_DEFINITIONS = {
     upsModel: { name: 'UPS Model', entityCategory: 'diagnostic', topicSuffix: 'device/info/model' },
     batteryReplacementDate: { name: 'Battery Replacement Date', entityCategory: 'diagnostic', topicSuffix: 'device/battery/replacement_date' },
     batteryCount: { units: 'pcs', name: 'Battery Count', entityCategory: 'diagnostic', topicSuffix: 'device/battery/count' },
-    batteryChargeVoltage: { units: 'V', deviceClass: 'voltage', name: 'Battery Charge Voltage', entityCategory: 'diagnostic', topicSuffix: 'device/battery/charge_voltage' },
+    //batteryChargeVoltage: { units: 'V', deviceClass: 'voltage', name: 'Battery Charge Voltage', entityCategory: 'diagnostic', suggestedPrecision: 2, topicSuffix: 'device/battery/charge_voltage' },
     batteryVoltageRating: { units: 'V', deviceClass: 'voltage', name: 'Battery Voltage Rating', entityCategory: 'diagnostic', topicSuffix: 'device/battery/voltage_rating' }
 };
 
@@ -358,7 +370,7 @@ const prepareDiscoveryMessages = (statusInfo, deviceInfo) => {
                 message: {
                     name: definition.name,
                     state_topic: topic,
-                    unique_id: `ups_sip_basement_${key}`,
+                    unique_id: `${HA_DEVICE_ID}_${key}`,
                     device: deviceInfo,
                     ...(definition.units && { unit_of_measurement: definition.units }),
                     ...(definition.deviceClass && { device_class: definition.deviceClass }),
