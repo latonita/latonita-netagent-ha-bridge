@@ -1,0 +1,20 @@
+{
+  "name": "netagent-ha-bridge",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Anton.Viktorov@live.com",
+  "license": "MIT",
+  "description": "Megatec NetAgent Web to MQTT/HomeAssitant bridge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/latonita/netagent-ha-bridge.git"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "jsdom": "^25.0.1",
+    "mqtt": "^5.10.3"
+  }
+}

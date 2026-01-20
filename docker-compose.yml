@@ -1,0 +1,7 @@
+services:
+  netagent-ha-bridge:
+    build: .
+    container_name: netagent-ha-bridge
+    restart: unless-stopped
+    env_file:
+      - .env
