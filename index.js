@@ -6,7 +6,7 @@ const net = require('net');
 
 const MQTT_SERVER = process.env.MQTT_SERVER || 'mqtt://192.168.1.1';
 const IP_ADDRESS = process.env.UPS_IP || '192.168.1.2';
-const UPS_HTTP_PORT = Number(process.env.UPS_PORT || 80);
+const UPS_HTTP_PORT = Number(process.env.UPS_HTTP_PORT || 80);
 
 const UPS_TOPIC = process.env.UPS_TOPIC || 'ups-netagent';
 const DISCOVERY_TOPIC_PREFIX = process.env.DISCOVERY_TOPIC_PREFIX || `homeassistant/sensor/${UPS_TOPIC}`;
