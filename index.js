@@ -388,29 +388,31 @@ const prepareStateMessages = (statusInfo) => {
 };
 
 const prepareDiscoveryMessages = (statusInfo, deviceInfo) => {
-    return Object.entries(statusInfo)
-        .filter(([key]) => SENSOR_DEFINITIONS[key])
-        .map(([key]) => {
-            const definition = SENSOR_DEFINITIONS[key];
-            const topic = buildStateTopic(key);
-            const discoveryKey = toSnakeCase(key);
-            return {
-                topic: `${DISCOVERY_TOPIC_PREFIX}/${discoveryKey}/config`,
-                retain: true,
-                message: {
-                    name: definition.name,
-                    state_topic: topic,
-                    unique_id: `${HA_DEVICE_ID}_${discoveryKey}`,
-                    device: deviceInfo,
-                    ...(definition.units && { unit_of_measurement: definition.units }),
-                    ...(definition.deviceClass && { device_class: definition.deviceClass }),
-                    ...(definition.stateClass && { state_class: definition.stateClass }),
-                    ...(definition.entityCategory && { entity_category: definition.entityCategory }),
-                    ...(definition.icon && { icon: definition.icon }),
-                    ...(typeof definition.suggestedPrecision === 'number' && { suggested_display_precision: definition.suggestedPrecision })
-                }
-            };
-        });
+    const sortedKeys = Object.keys(statusInfo)
+        .filter((key) => SENSOR_DEFINITIONS[key])
+        .sort((a, b) => toSnakeCase(a).localeCompare(toSnakeCase(b)));
+
+    return sortedKeys.map((key) => {
+        const definition = SENSOR_DEFINITIONS[key];
+        const topic = buildStateTopic(key);
+        const discoveryKey = toSnakeCase(key);
+        return {
+            topic: `${DISCOVERY_TOPIC_PREFIX}/${discoveryKey}/config`,
+            retain: true,
+            message: {
+                name: definition.name,
+                state_topic: topic,
+                unique_id: `${HA_DEVICE_ID}_${discoveryKey}`,
+                device: deviceInfo,
+                ...(definition.units && { unit_of_measurement: definition.units }),
+                ...(definition.deviceClass && { device_class: definition.deviceClass }),
+                ...(definition.stateClass && { state_class: definition.stateClass }),
+                ...(definition.entityCategory && { entity_category: definition.entityCategory }),
+                ...(definition.icon && { icon: definition.icon }),
+                ...(typeof definition.suggestedPrecision === 'number' && { suggested_display_precision: definition.suggestedPrecision })
+            }
+        };
+    });
 };
 
 const removeGlitchyValues = (statusInfo) => {
