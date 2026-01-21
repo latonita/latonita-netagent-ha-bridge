@@ -479,11 +479,9 @@ const publishMqttMessages = (messages) => {
 };
 
 const pollOnce = async () => {
-    const [statusHtml, systemHtml, infoHtml] = await Promise.all([
-        fetchUpsPage(UPS_PAGE_PATHS.status),
-        fetchUpsPage(UPS_PAGE_PATHS.system),
-        fetchUpsPage(UPS_PAGE_PATHS.info)
-    ]);
+    const statusHtml = await fetchUpsPage(UPS_PAGE_PATHS.status);
+    const systemHtml = await fetchUpsPage(UPS_PAGE_PATHS.system);
+    const infoHtml = await fetchUpsPage(UPS_PAGE_PATHS.info);
 
     const statusInfo = parseStatusPage(statusHtml);
     const systemInfo = parseSystemStatusPage(systemHtml);
