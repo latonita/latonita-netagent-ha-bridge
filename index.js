@@ -275,6 +275,13 @@ const parseUpsInfoPage = (html) => {
     });
 };
 
+const toSnakeCase = (value) => {
+    return value
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/[\s-]+/g, '_')
+        .toLowerCase();
+};
+
 const buildMqttDeviceInfo = (systemInfo, upsInfo) => {
     const device = {
         identifiers: [HA_DEVICE_ID],
@@ -359,7 +366,8 @@ const buildStateTopic = (key) => {
         return undefined;
     }
 
-    return `${UPS_TOPIC}/${definition.topicSuffix || key}`;
+    const suffix = definition.topicSuffix || toSnakeCase(key);
+    return `${UPS_TOPIC}/${suffix}`;
 };
 
 const prepareStateMessages = (statusInfo) => {
@@ -385,13 +393,14 @@ const prepareDiscoveryMessages = (statusInfo, deviceInfo) => {
         .map(([key]) => {
             const definition = SENSOR_DEFINITIONS[key];
             const topic = buildStateTopic(key);
+            const discoveryKey = toSnakeCase(key);
             return {
-                topic: `${DISCOVERY_TOPIC_PREFIX}/${key}/config`,
+                topic: `${DISCOVERY_TOPIC_PREFIX}/${discoveryKey}/config`,
                 retain: true,
                 message: {
                     name: definition.name,
                     state_topic: topic,
-                    unique_id: `${HA_DEVICE_ID}_${key}`,
+                    unique_id: `${HA_DEVICE_ID}_${discoveryKey}`,
                     device: deviceInfo,
                     ...(definition.units && { unit_of_measurement: definition.units }),
                     ...(definition.deviceClass && { device_class: definition.deviceClass }),
