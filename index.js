@@ -7,6 +7,7 @@ const net = require('net');
 const MQTT_SERVER = process.env.MQTT_SERVER || 'mqtt://192.168.1.1';
 const IP_ADDRESS = process.env.UPS_IP || '192.168.1.2';
 const UPS_HTTP_PORT = Number(process.env.UPS_HTTP_PORT || 80);
+const UPS_HTTP_TIMEOUT_MS = Number(process.env.UPS_HTTP_TIMEOUT_MS || 5000);
 
 const UPS_TOPIC = process.env.UPS_TOPIC || 'ups-netagent';
 const DISCOVERY_TOPIC_PREFIX = process.env.DISCOVERY_TOPIC_PREFIX || `homeassistant/sensor/${UPS_TOPIC}`;
@@ -26,6 +27,7 @@ const logStartupConfiguration = () => {
         mqttServer: MQTT_SERVER,
         upsIp: IP_ADDRESS,
         upsPort: UPS_HTTP_PORT,
+        upsTimeoutMs: UPS_HTTP_TIMEOUT_MS,
         pollIntervalMs: POLL_INTERVAL_MS,
         upsTopic: UPS_TOPIC,
         discoveryTopicPrefix: DISCOVERY_TOPIC_PREFIX,
@@ -50,6 +52,21 @@ const fetchUpsPage = (path) => {
         });
 
         const chunks = [];
+        let settled = false;
+
+        const finish = (err, body) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (err) {
+                reject(err);
+            } else {
+                resolve(body);
+            }
+        };
+
+        client.setTimeout(UPS_HTTP_TIMEOUT_MS);
 
         client.on('data', (chunk) => {
             chunks.push(chunk);
@@ -59,16 +76,20 @@ const fetchUpsPage = (path) => {
             const rawResponse = Buffer.concat(chunks).toString();
             const separatorIndex = rawResponse.indexOf('\r\n\r\n');
             if (separatorIndex === -1) {
-                reject(new Error('Invalid HTTP response from UPS'));
+                finish(new Error('Invalid HTTP response from UPS'));
                 return;
             }
 
             const body = rawResponse.substring(separatorIndex + 4);
-            resolve(body);
+            finish(null, body);
         });
 
         client.on('error', (err) => {
-            reject(err);
+            finish(err);
+        });
+
+        client.on('timeout', () => {
+            client.destroy(new Error('UPS request timed out'));
         });
 
         client.on('close', () => {
