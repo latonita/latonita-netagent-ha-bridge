@@ -1,18 +1,18 @@
-FROM node:20-bookworm-slim AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY go.mod go.sum ./
+RUN go mod download
 
-COPY index.js ./
+COPY main.go ./
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o netagent-ha-bridge .
 
-FROM gcr.io/distroless/nodejs20-debian12:nonroot
-ENV NODE_ENV=production
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates
 WORKDIR /app
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/index.js ./index.js
+COPY --from=builder /app/netagent-ha-bridge .
 
-CMD ["index.js"]
+USER nobody
+CMD ["./netagent-ha-bridge"]
